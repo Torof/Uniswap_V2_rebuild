@@ -1,16 +1,21 @@
+//SPDX-License-Identifier: Unlicensed
+
 pragma solidity 0.8.21;
+
+// import "./libraries/UQ112x112.sol";
+// import "./interfaces/IERC20.sol";
+
+//TODO implement fixed point library for uint112 ?
 
 import "./interfaces/IUniswapV2Pair.sol";
 import "./UniswapV2ERC20.sol";
 import "./libraries/Math.sol";
-import "./libraries/UQ112x112.sol";
-// import "./interfaces/IERC20.sol";
 import "./interfaces/IUniswapV2Factory.sol";
 import "./interfaces/IUniswapV2Callee.sol";
+import { UD60x18, ud } from "@prb/math/UD60x18.sol";
 
 contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
-    // using SafeMath  for uint;
-    using UQ112x112 for uint224;
+    // using UQ112x112 for uint224;
 
     uint public constant MINIMUM_LIQUIDITY = 10 ** 3;
     bytes4 private constant SELECTOR =
@@ -29,6 +34,7 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
     uint public kLast; // reserve0 * reserve1, as of immediately after the most recent liquidity event
 
     uint private unlocked = 1;
+
     modifier lock() {
         require(unlocked == 1, "UniswapV2: LOCKED");
         unlocked = 0;
@@ -36,94 +42,61 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
         unlocked = 1;
     }
 
-    function getReserves()
-        public
-        view
-        returns (
-            uint112 _reserve0,
-            uint112 _reserve1,
-            uint32 _blockTimestampLast
-        )
-    {
-        _reserve0 = reserve0;
-        _reserve1 = reserve1;
-        _blockTimestampLast = blockTimestampLast;
-    }
-
-    function _safeTransfer(address token, address to, uint value) private {
-        (bool success, bytes memory data) = token.call(
-            abi.encodeWithSelector(SELECTOR, to, value)
-        );
-        require(
-            success && (data.length == 0 || abi.decode(data, (bool))),
-            "UniswapV2: TRANSFER_FAILED"
-        );
-    }
 
     constructor() {
         factory = msg.sender;
     }
 
     // called once by the factory at time of deployment
+    /**
+     * 
+     * @param _token0 token0 address
+     * @param _token1 token1 address
+     */
     function initialize(address _token0, address _token1) external {
         require(msg.sender == factory, "UniswapV2: FORBIDDEN"); // sufficient check
         token0 = _token0;
         token1 = _token1;
     }
 
-    // update reserves and, on the first call per block, price accumulators
-    function _update(
-        uint balance0,
-        uint balance1,
-        uint112 _reserve0,
-        uint112 _reserve1
-    ) private {
-        require(
-            balance0 <= type(uint112).max && balance1 <= type(uint112).max,
-            "UniswapV2: OVERFLOW"
+    // force balances to match reserves
+    /**
+     * 
+     * @param to recipient address
+     */
+    function skim(address to) external lock {
+        address _token0 = token0; // gas savings
+        address _token1 = token1; // gas savings
+        _safeTransfer(
+            _token0,
+            to,
+            IERC20(_token0).balanceOf(address(this)) - reserve0
         );
-        uint32 blockTimestamp = uint32(block.timestamp % 2 ** 32);
-        uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
-        if (timeElapsed > 0 && _reserve0 != 0 && _reserve1 != 0) {
-            // * never overflows, and + overflow is desired
-            price0CumulativeLast +=
-                uint(UQ112x112.encode(_reserve1).uqdiv(_reserve0)) *
-                timeElapsed;
-            price1CumulativeLast +=
-                uint(UQ112x112.encode(_reserve0).uqdiv(_reserve1)) *
-                timeElapsed;
-        }
-        reserve0 = uint112(balance0);
-        reserve1 = uint112(balance1);
-        blockTimestampLast = blockTimestamp;
-        emit Sync(reserve0, reserve1);
+        _safeTransfer(
+            _token1,
+            to,
+            IERC20(_token1).balanceOf(address(this)) - reserve1
+        );
     }
 
-    // if fee is on, mint liquidity equivalent to 1/6th of the growth in sqrt(k)
-    function _mintFee(
-        uint112 _reserve0,
-        uint112 _reserve1
-    ) private returns (bool feeOn) {
-        address feeTo = IUniswapV2Factory(factory).feeTo();
-        feeOn = feeTo != address(0);
-        uint _kLast = kLast; // gas savings
-        if (feeOn) {
-            if (_kLast != 0) {
-                uint rootK = Math.sqrt(uint(_reserve0) * _reserve1);
-                uint rootKLast = Math.sqrt(_kLast);
-                if (rootK > rootKLast) {
-                    uint numerator = totalSupply * (rootK - rootKLast);
-                    uint denominator = rootK * 5 + rootKLast;
-                    uint liquidity = numerator / denominator;
-                    if (liquidity > 0) _mint(feeTo, liquidity);
-                }
-            }
-        } else if (_kLast != 0) {
-            kLast = 0;
-        }
+    // force reserves to match balances
+    /**
+     * 
+     */
+    function sync() external lock {
+        _update(
+            IERC20(token0).balanceOf(address(this)),
+            IERC20(token1).balanceOf(address(this)),
+            reserve0,
+            reserve1
+        );
     }
 
     // this low-level function should be called from a contract which performs important safety checks
+    /**
+     * 
+     * @param to recipient address
+     */
     function mint(address to) external lock returns (uint liquidity) {
         (uint112 _reserve0, uint112 _reserve1, ) = getReserves(); // gas savings
         uint balance0 = IERC20(token0).balanceOf(address(this));
@@ -150,7 +123,11 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
         emit Mint(msg.sender, amount0, amount1);
     }
 
-    // this low-level function should be called from a contract which performs important safety checks
+        // this low-level function should be called from a contract which performs important safety checks
+    /**
+     * 
+     * @param to recipient address
+     */
     function burn(
         address to
     ) external lock returns (uint amount0, uint amount1) {
@@ -181,6 +158,13 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
     }
 
     // this low-level function should be called from a contract which performs important safety checks
+    /**
+     * 
+     * @param amount0Out amount0Out
+     * @param amount1Out amount1Out
+     * @param to recipient address
+     * @param data data
+     */
     function swap(
         uint amount0Out,
         uint amount1Out,
@@ -241,29 +225,104 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
         emit Swap(msg.sender, amount0In, amount1In, amount0Out, amount1Out, to);
     }
 
-    // force balances to match reserves
-    function skim(address to) external lock {
-        address _token0 = token0; // gas savings
-        address _token1 = token1; // gas savings
-        _safeTransfer(
-            _token0,
-            to,
-            IERC20(_token0).balanceOf(address(this)) - reserve0
+    /**
+     * 
+     * @return _reserve0 reserve0
+     * @return _reserve1 reserve1
+     * @return _blockTimestampLast blockTimestampLast
+     */
+    function getReserves()
+        public
+        view
+        returns (
+            uint112 _reserve0,
+            uint112 _reserve1,
+            uint32 _blockTimestampLast
+        )
+    {
+        _reserve0 = reserve0;
+        _reserve1 = reserve1;
+        _blockTimestampLast = blockTimestampLast;
+    }
+
+    // update reserves and, on the first call per block, price accumulators
+    /**
+     * 
+     * @param balance0 balance0
+     * @param balance1  balance1
+     * @param _reserve0 reserve0
+     * @param _reserve1 reserve1
+     */
+    function _update(
+        uint balance0,
+        uint balance1,
+        uint112 _reserve0,
+        uint112 _reserve1
+    ) private {
+        require(
+            balance0 <= type(uint112).max && balance1 <= type(uint112).max,
+            "UniswapV2: OVERFLOW"
         );
-        _safeTransfer(
-            _token1,
-            to,
-            IERC20(_token1).balanceOf(address(this)) - reserve1
+        uint32 blockTimestamp = uint32(block.timestamp % 2 ** 32);
+        uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
+        if (timeElapsed > 0 && _reserve0 != 0 && _reserve1 != 0) {
+            // * never overflows, and + overflow is desired
+            price0CumulativeLast +=
+                uint(UQ112x112.encode(_reserve1).uqdiv(_reserve0)) *
+                timeElapsed;
+            price1CumulativeLast +=
+                uint(UQ112x112.encode(_reserve0).uqdiv(_reserve1)) *
+                timeElapsed;
+        }
+        reserve0 = uint112(balance0);
+        reserve1 = uint112(balance1);
+        blockTimestampLast = blockTimestamp;
+        emit Sync(reserve0, reserve1);
+    }
+
+        /**
+     * 
+     * @param token address of token contract to transfer
+     * @param to recipient address
+     * @param value amount of tokens to transfer
+     */
+    function _safeTransfer(address token, address to, uint value) private {
+        (bool success, bytes memory data) = token.call(
+            abi.encodeWithSelector(SELECTOR, to, value)
+        );
+        require(
+            success && (data.length == 0 || abi.decode(data, (bool))),
+            "UniswapV2: TRANSFER_FAILED"
         );
     }
 
-    // force reserves to match balances
-    function sync() external lock {
-        _update(
-            IERC20(token0).balanceOf(address(this)),
-            IERC20(token1).balanceOf(address(this)),
-            reserve0,
-            reserve1
-        );
+    // if fee is on, mint liquidity equivalent to 1/6th of the growth in sqrt(k)
+    /**
+     * 
+     * @param _reserve0 reserve0
+     * @param _reserve1 reserve1
+     */
+    function _mintFee(
+        uint112 _reserve0,
+        uint112 _reserve1
+    ) private returns (bool feeOn) {
+        address feeTo = IUniswapV2Factory(factory).feeTo();
+        feeOn = feeTo != address(0);
+        uint _kLast = kLast; // gas savings
+        if (feeOn) {
+            if (_kLast != 0) {
+                uint rootK = Math.sqrt(uint(_reserve0) * _reserve1);
+                uint rootKLast = Math.sqrt(_kLast);
+                if (rootK > rootKLast) {
+                    uint numerator = totalSupply * (rootK - rootKLast);
+                    uint denominator = rootK * 5 + rootKLast;
+                    uint liquidity = numerator / denominator;
+                    if (liquidity > 0) _mint(feeTo, liquidity);
+                }
+            }
+        } else if (_kLast != 0) {
+            kLast = 0;
+        }
     }
+
 }
