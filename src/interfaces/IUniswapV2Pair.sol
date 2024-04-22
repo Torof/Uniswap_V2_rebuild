@@ -1,4 +1,4 @@
-pragma solidity 0.8.21;
+pragma solidity 0.8.25;
 
 interface IUniswapV2Pair {
     // event Approval(address indexed owner, address indexed spender, uint value);

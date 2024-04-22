@@ -1,6 +1,6 @@
 //SPDX-License-Identifier: Unlicensed
 
-pragma solidity 0.8.21;
+pragma solidity 0.8.25;
 
 // import "./libraries/UQ112x112.sol";
 // import "./interfaces/IERC20.sol";
