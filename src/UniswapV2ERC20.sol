@@ -7,7 +7,6 @@ import "./interfaces/IERC20.sol";
 // import './libraries/SafeMath.sol';
 
 contract UniswapV2ERC20 is IERC20 {
-    // using SafeMath for uint;
 
     string public constant name = 'Uniswap V2';
     string public constant symbol = 'UNI-V2';

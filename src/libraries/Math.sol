@@ -1,4 +1,4 @@
-pragma solidity 0.8.21;
+pragma solidity 0.8.25;
 
 // a library for performing various math operations
 
