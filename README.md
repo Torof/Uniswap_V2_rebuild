@@ -9,7 +9,7 @@
 - change adequate storage variables to Immutable
 - replacing require with custom errors
 
-- **important concepts** :
+ ## **Important concepts** :
 
 - TWAP:
 
