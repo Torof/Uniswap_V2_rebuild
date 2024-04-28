@@ -3,9 +3,6 @@
 pragma solidity 0.8.20;
 
 
-//TODO implement fixed point library for uint112 ?
-
-
 import {IUniswapV2Pair} from "./interfaces/IUniswapV2Pair.sol";
 import {IUniswapV2Factory} from "./interfaces/IUniswapV2Factory.sol";
 import {IUniswapV2Callee} from "./interfaces/IUniswapV2Callee.sol";
@@ -15,7 +12,8 @@ import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {ERC20} from "solady/tokens/ERC20.sol";
 
 contract UniswapV2Pair is IUniswapV2Pair, ERC20 {
-    // using UQ112x112 for uint224;
+    using SafeERC20 for IERC20;
+    using FixedPointMathLib for uint256;
 
     uint public constant MINIMUM_LIQUIDITY = 10 ** 3;
     bytes4 private constant SELECTOR =
