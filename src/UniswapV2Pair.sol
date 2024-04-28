@@ -1,20 +1,20 @@
 //SPDX-License-Identifier: Unlicensed
 
-pragma solidity 0.8.25;
+pragma solidity 0.8.20;
 
-// import "./libraries/UQ112x112.sol";
-// import "./interfaces/IERC20.sol";
 
 //TODO implement fixed point library for uint112 ?
 
-import "./interfaces/IUniswapV2Pair.sol";
-import "./UniswapV2ERC20.sol";
-import "./libraries/Math.sol";
-import "./interfaces/IUniswapV2Factory.sol";
-import "./interfaces/IUniswapV2Callee.sol";
-import { UD60x18, ud } from "@prb/math/UD60x18.sol";
 
-contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
+import {IUniswapV2Pair} from "./interfaces/IUniswapV2Pair.sol";
+import {IUniswapV2Factory} from "./interfaces/IUniswapV2Factory.sol";
+import {IUniswapV2Callee} from "./interfaces/IUniswapV2Callee.sol";
+import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
+import {ERC20} from "solady/tokens/ERC20.sol";
+
+contract UniswapV2Pair is IUniswapV2Pair, ERC20 {
     // using UQ112x112 for uint224;
 
     uint public constant MINIMUM_LIQUIDITY = 10 ** 3;
@@ -67,13 +67,11 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
     function skim(address to) external lock {
         address _token0 = token0; // gas savings
         address _token1 = token1; // gas savings
-        _safeTransfer(
-            _token0,
+        IERC20(token0).safeTransfer(
             to,
             IERC20(_token0).balanceOf(address(this)) - reserve0
         );
-        _safeTransfer(
-            _token1,
+        IERC20(token1).safeTransfer(
             to,
             IERC20(_token1).balanceOf(address(this)) - reserve1
         );
@@ -147,8 +145,8 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
             "UniswapV2: INSUFFICIENT_LIQUIDITY_BURNED"
         );
         _burn(address(this), liquidity);
-        _safeTransfer(_token0, to, amount0);
-        _safeTransfer(_token1, to, amount1);
+        IERC20(token0).safeTransfer(to, amount0);
+        IERC20(token1).safeTransfer(to, amount1);
         balance0 = IERC20(_token0).balanceOf(address(this));
         balance1 = IERC20(_token1).balanceOf(address(this));
 
@@ -188,8 +186,8 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
             address _token0 = token0;
             address _token1 = token1;
             require(to != _token0 && to != _token1, "UniswapV2: INVALID_TO");
-            if (amount0Out > 0) _safeTransfer(_token0, to, amount0Out); // optimistically transfer tokens
-            if (amount1Out > 0) _safeTransfer(_token1, to, amount1Out); // optimistically transfer tokens
+            if (amount0Out > 0) IERC20(token0).safeTransfer(to, amount0Out); // optimistically transfer tokens
+            if (amount1Out > 0) IERC20(token1).safeTransfer(to, amount1Out); // optimistically transfer tokens
             if (data.length > 0)
                 IUniswapV2Callee(to).uniswapV2Call(
                     msg.sender,
@@ -280,21 +278,6 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
         emit Sync(reserve0, reserve1);
     }
 
-        /**
-     * 
-     * @param token address of token contract to transfer
-     * @param to recipient address
-     * @param value amount of tokens to transfer
-     */
-    function _safeTransfer(address token, address to, uint value) private {
-        (bool success, bytes memory data) = token.call(
-            abi.encodeWithSelector(SELECTOR, to, value)
-        );
-        require(
-            success && (data.length == 0 || abi.decode(data, (bool))),
-            "UniswapV2: TRANSFER_FAILED"
-        );
-    }
 
     // if fee is on, mint liquidity equivalent to 1/6th of the growth in sqrt(k)
     /**

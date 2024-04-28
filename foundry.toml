@@ -5,11 +5,13 @@ libs = ["lib"]
 
 remappings = [
     "@openzeppelin/=lib/openzeppelin-contracts/",
+    "solady=lib/solady/src/"
 ]
 
 solc_remaps = [
     "ds-test/=lib/ds-test/src/",
     "forge-std/=lib/forge-std/src/",
+    "solady=lib/solady/src/"
   ]
 
 [fuzz]
