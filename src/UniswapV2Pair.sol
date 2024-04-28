@@ -45,6 +45,14 @@ contract UniswapV2Pair is IUniswapV2Pair, ERC20 {
         factory = msg.sender;
     }
 
+    function name() public pure override returns (string memory) {
+        return "Uniswap V2";
+    }
+
+    function symbol() public pure override returns (string memory) {
+        return "UNI-V2";
+    }
+
     // called once by the factory at time of deployment
     /**
      * 
@@ -101,12 +109,12 @@ contract UniswapV2Pair is IUniswapV2Pair, ERC20 {
         uint amount1 = balance1 - _reserve1;
 
         bool feeOn = _mintFee(_reserve0, _reserve1);
-        uint _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
+        uint _totalSupply = totalSupply(); // gas savings, must be defined here since totalSupply can update in _mintFee
         if (_totalSupply == 0) {
-            liquidity = Math.sqrt(amount0 * amount1) - MINIMUM_LIQUIDITY;
+            liquidity = (amount0 * amount1).sqrt() - MINIMUM_LIQUIDITY;
             _mint(address(0), MINIMUM_LIQUIDITY); // permanently lock the first MINIMUM_LIQUIDITY tokens
         } else {
-            liquidity = Math.min(
+            liquidity = FixedPointMathLib.min(
                 amount0 * _totalSupply / _reserve0,
                 amount1 * _totalSupply / _reserve1
             );
@@ -132,10 +140,10 @@ contract UniswapV2Pair is IUniswapV2Pair, ERC20 {
         address _token1 = token1; // gas savings
         uint balance0 = IERC20(_token0).balanceOf(address(this));
         uint balance1 = IERC20(_token1).balanceOf(address(this));
-        uint liquidity = balanceOf[address(this)];
+        uint liquidity = balanceOf(address(this));
 
         bool feeOn = _mintFee(_reserve0, _reserve1);
-        uint _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
+        uint _totalSupply = totalSupply(); // gas savings, must be defined here since totalSupply can update in _mintFee
         amount0 = liquidity * balance0 / _totalSupply; // using balances ensures pro-rata distribution
         amount1 = liquidity * balance1 / _totalSupply; // using balances ensures pro-rata distribution
         require(
@@ -264,10 +272,10 @@ contract UniswapV2Pair is IUniswapV2Pair, ERC20 {
         if (timeElapsed > 0 && _reserve0 != 0 && _reserve1 != 0) {
             // * never overflows, and + overflow is desired
             price0CumulativeLast +=
-                uint(UQ112x112.encode(_reserve1).uqdiv(_reserve0)) *
+                uint(_reserve1).divWad(uint(_reserve0)) *
                 timeElapsed;
             price1CumulativeLast +=
-                uint(UQ112x112.encode(_reserve0).uqdiv(_reserve1)) *
+                uint(_reserve0).divWad(uint(_reserve1)) *
                 timeElapsed;
         }
         reserve0 = uint112(balance0);
@@ -292,10 +300,10 @@ contract UniswapV2Pair is IUniswapV2Pair, ERC20 {
         uint _kLast = kLast; // gas savings
         if (feeOn) {
             if (_kLast != 0) {
-                uint rootK = Math.sqrt(uint(_reserve0) * _reserve1);
-                uint rootKLast = Math.sqrt(_kLast);
+                uint rootK = (uint(_reserve0) * _reserve1).sqrt();
+                uint rootKLast = (_kLast).sqrt();
                 if (rootK > rootKLast) {
-                    uint numerator = totalSupply * (rootK - rootKLast);
+                    uint numerator = totalSupply() * (rootK - rootKLast);
                     uint denominator = rootK * 5 + rootKLast;
                     uint liquidity = numerator / denominator;
                     if (liquidity > 0) _mint(feeTo, liquidity);
